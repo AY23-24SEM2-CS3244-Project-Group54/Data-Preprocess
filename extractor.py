@@ -1,16 +1,26 @@
 import fitz  # PyMuPDF
-from tqdm import tqdm 
+from tqdm import tqdm
 import csv
 import re
 import os
 from sklearn.feature_extraction.text import CountVectorizer
+import string
+import nltk
+import nltk.corpus
+from nltk import pos_tag
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords, wordnet
+from nltk.stem import WordNetLemmatizer
+from gensim.test.utils import common_texts
+from gensim.models import Word2Vec
+
 
 def extract_key_info(pdf_path):
     doc = fitz.open(pdf_path)
     first_page_text = doc[0].get_text("text")
     last_page_text = doc[-1].get_text("text")
     full_text = "".join([page.get_text() for page in doc])
-    
+
     # Keywords and corresponding outcomes
     keywords_to_outcomes = {
         "dismissed": "Appeal dismissed.",
@@ -33,13 +43,14 @@ def extract_key_info(pdf_path):
         "Tribunal/Court": "",
         "Outcome": "Outcome not explicitly mentioned",
         "The Facts": "Facts section not found",
-        "Unigram Vector": []
+        "Unigram Vector": [],
+        "word2vec": []
     }
 
     # Match case information
     for match in case_info_pattern.finditer(first_page_text):
         key_info[match.group(1)] = match.group(2)
-    
+
     # Extract facts section
     facts_section = facts_section_pattern.search(full_text)
     if facts_section:
@@ -47,6 +58,9 @@ def extract_key_info(pdf_path):
 
     # Unigram Vector
     key_info["Unigram Vector"] = get_unigram_vector(key_info["The Facts"])
+
+    # Word2Vec
+    key_info["word2vec"] = word2vec_converter(key_info["The Facts"])
 
     # Determine the outcome
     last_page_lines = last_page_text.split('\n')
@@ -57,7 +71,7 @@ def extract_key_info(pdf_path):
                 break
         if key_info["Outcome"] != "Outcome not explicitly mentioned":
             break
-    
+
     # Extract capitalized words before "Act ("
     for page in doc:
         text = page.get_text()
@@ -68,14 +82,45 @@ def extract_key_info(pdf_path):
             unique_sequences.add(capitalized_words_sequence)
 
     key_info["Capitalized Words Before 'Act ('"] = '; '.join(unique_sequences)
-    
+
     doc.close()
     return key_info
+
+def get_wordnet_pos(word):
+    """Map POS tag to first character lemmatize() accepts"""
+    tag = nltk.pos_tag([word])[0][1][0].upper()
+    tag_dict = {
+        "J": wordnet.ADJ,
+        "N": wordnet.NOUN,
+        "V": wordnet.VERB,
+        "R": wordnet.ADV
+    }
+    return tag_dict.get(tag, wordnet.NOUN)
+
+def data_preprocess(text):
+    """
+    Helper function for data preprocessing
+    1. Convert text to lower case
+    2. Tokenize text
+    3. Removal of stop words
+    4. Lemmatize words
+    """
+    text = text.lower()
+    text = text.translate(str.maketrans('', '', string.punctuation))  # replace punctuation with none
+
+    tokenized_text = word_tokenize(text)
+
+    stop_words = set(stopwords.words('english'))
+    tokenized_text = [word for word in tokenized_text if word not in stop_words]
+
+    lemmatizer = WordNetLemmatizer()
+    return [lemmatizer.lemmatize(word, get_wordnet_pos(word)) for word in text]
+
 
 def get_unigram_vector(text):
     # Initialize CountVectorizer to convert text into unigram frequency vector
     vectorizer = CountVectorizer(stop_words='english', lowercase=True)
-    
+
     # Check if text is not empty and not composed solely of stop words
     if text.strip() == '' or all(word in vectorizer.get_stop_words() for word in text.split()):
         # Return an empty list or some placeholder to indicate no valid words were found
@@ -88,14 +133,31 @@ def get_unigram_vector(text):
             # Handle the case where no valid words are found after preprocessing
             return []
 
+def word2vec_converter(text):
+    cleaned_text = data_preprocess(text)
+    model = Word2Vec(sentences=[cleaned_text], vector_size=10, window=1, min_count=1, workers=4)
+
+    model.train([text],
+                total_examples=model.corpus_count,
+                epochs=10)  # Number of iterations (epochs) over the corpus
+    word_vectors = model.wv
+
+    result = []
+    # Get the word vector for a specific word
+    for word in text:
+        word_vector = word_vectors[word]
+        result.append(word_vector)
+    return result
 
 def save_to_csv(all_info, csv_file_path):
-    headers = ["File Name", "Case Number", "Decision Date", "Tribunal/Court", "Outcome", "The Facts", "Unigram Vector", "Capitalized Words Before 'Act ('"]
+    headers = ["File Name", "Case Number", "Decision Date", "Tribunal/Court", "Outcome", "The Facts", "Unigram Vector",
+               "Word2Vec", "Capitalized Words Before 'Act ('"]
     with open(csv_file_path, 'w', newline='', encoding='utf-8') as file:
         writer = csv.DictWriter(file, fieldnames=headers)
         writer.writeheader()
         for info in all_info:
             writer.writerow(info)
+
 
 def batch_process_pdf_folder(folder_path, csv_file_path):
     all_info = []
@@ -107,7 +169,9 @@ def batch_process_pdf_folder(folder_path, csv_file_path):
         all_info.append(key_info)
 
     save_to_csv(all_info, csv_file_path)
-    print(f"All PDF files in {folder_path} have been processed. Key information is saved to {csv_file_path}. Total files processed: {len(all_info)}.")
+    print(
+        f"All PDF files in {folder_path} have been processed. Key information is saved to {csv_file_path}. Total files processed: {len(all_info)}.")
+
 
 # Adjust these paths as per your requirements
 folder_path = 'i:/CS3244/test_data/'
