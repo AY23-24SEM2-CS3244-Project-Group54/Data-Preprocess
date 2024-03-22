@@ -28,6 +28,7 @@ def extract_key_info(pdf_path):
     last_page_text = doc[-1].get_text("text")
     full_text = "".join([page.get_text() for page in doc])
 
+    print(first_page_text)
     # Keywords and corresponding outcomes
     keywords_to_outcomes = {
         "dismissed": "Appeal dismissed.",
@@ -37,7 +38,8 @@ def extract_key_info(pdf_path):
     }
 
     # Regex patterns
-    case_info_pattern = re.compile(r"(Case Number|Decision Date|Tribunal/Court)\s*:\s*(.+)")
+    decision_date_pattern = re.compile(r"(Decision Date)\s*:\s*(.+)")
+    coram_pattern = re.compile(r"(Coram)\s*:\s*(.+)")
     facts_section_pattern = re.compile(r"The facts\s*(.*?)(?=(Version No|\Z))", re.DOTALL)
     capitalized_words_pattern = re.compile(r"([A-Z][\w\s]+)(?=Act \()")
     unique_sequences = set()
@@ -45,17 +47,29 @@ def extract_key_info(pdf_path):
     # Extract basic info
     key_info = {
         "File Name": os.path.basename(pdf_path),
-        "Case Number": "",
         "Decision Date": "",
+        "Coram": "",
         "Tribunal/Court": "",
         "Outcome": "Outcome not explicitly mentioned",
         "The Facts": "Facts section not found",
         "Unigram Vector": [],
-        "word2vec": []
+        #"word2vec": []
     }
 
+    # Extract Tribunal/Court
+    tribunal_court = pdf_path.split('_')[2]
+    if tribunal_court:
+        if 'SGHC':
+            key_info["Tribunal/Court"] = 'High Court'
+        elif 'SGCA':
+            key_info["Tribunal/Court"] = 'Court of Appeal'
+
+    # Extract Coram
+    for match in coram_pattern.finditer(first_page_text):
+        key_info[match.group(1)] = match.group(2)
+            
     # Match case information
-    for match in case_info_pattern.finditer(first_page_text):
+    for match in decision_date_pattern.finditer(first_page_text):
         key_info[match.group(1)] = match.group(2)
 
     # Extract facts section
@@ -67,7 +81,7 @@ def extract_key_info(pdf_path):
     key_info["Unigram Vector"] = get_unigram_vector(key_info["The Facts"])
 
     # Word2Vec
-    key_info["word2vec"] = word2vec_converter(key_info["The Facts"])
+    #key_info["word2vec"] = word2vec_converter(key_info["The Facts"])
 
     # Determine the outcome
     last_page_lines = last_page_text.split('\n')
@@ -183,7 +197,7 @@ def save_to_csv(all_info, csv_file_path):
 
 def batch_process_pdf_folder(folder_path, csv_file_path):
     all_info = []
-    pdf_files = [file for file in os.listdir(folder_path) if file.lower().endswith(".pdf")]
+    pdf_files = [file for file in os.listdir(folder_path)[0:100:5] if file.lower().endswith(".pdf")]
     # Use tqdm to create a progress bar for the loop
     for file in tqdm(pdf_files, desc="Processing PDFs"):
         pdf_path = os.path.join(folder_path, file)
@@ -196,7 +210,7 @@ def batch_process_pdf_folder(folder_path, csv_file_path):
 
 
 # Adjust these paths as per your requirements
-folder_path = 'D:/CS3244 project space/'
-csv_file_path = 'D:/CS3244 project space/final_data.csv'
+folder_path = 'data/raw/'
+csv_file_path = 'final_data.csv'
 
 batch_process_pdf_folder(folder_path, csv_file_path)
