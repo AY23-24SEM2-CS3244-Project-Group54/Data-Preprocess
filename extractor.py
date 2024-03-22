@@ -186,7 +186,7 @@ def word2vec_converter(text):
     return final_result
 
 def save_to_csv(all_info, csv_file_path):
-    headers = ["File Name", "Case Number", "Decision Date", "Tribunal/Court", "Outcome", "The Facts", "Unigram Vector",
+    headers = ["File Name", "Case Number", "Decision Date", "Tribunal/Court", "Coram", "Outcome", "The Facts", "Unigram Vector",
                "word2vec", "Capitalized Words Before 'Act ('"]
     with open(csv_file_path, 'w', newline='', encoding='utf-8') as file:
         writer = csv.DictWriter(file, fieldnames=headers)
