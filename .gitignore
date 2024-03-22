@@ -12,3 +12,6 @@ data/
 
 # Executables
 *.zip
+
+# Test CSV
+final_data.csv
