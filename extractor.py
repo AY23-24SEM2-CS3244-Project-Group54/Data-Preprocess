@@ -13,6 +13,13 @@ from nltk.corpus import stopwords, wordnet
 from nltk.stem import WordNetLemmatizer
 from gensim.test.utils import common_texts
 from gensim.models import Word2Vec
+import numpy as np
+
+nltk.download('punkt')
+nltk.download('stopwords')
+nltk.download('averaged_perceptron_tagger')
+nltk.download('wordnet')
+
 
 
 def extract_key_info(pdf_path):
@@ -116,6 +123,19 @@ def data_preprocess(text):
     lemmatizer = WordNetLemmatizer()
     return [lemmatizer.lemmatize(word, get_wordnet_pos(word)) for word in text]
 
+def get_vect_avg(vect):
+    vect = np.array(vect)
+    result = []
+    for i in range(vect.shape[1]):
+        sum_of_first_elements = vect[:, i].sum()
+
+        # Calculate the number of arrays
+        num_arrays = vect.shape[0]
+
+        # Calculate the average
+        result.append(sum_of_first_elements / num_arrays)
+    return result
+
 
 def get_unigram_vector(text):
     # Initialize CountVectorizer to convert text into unigram frequency vector
@@ -135,23 +155,25 @@ def get_unigram_vector(text):
 
 def word2vec_converter(text):
     cleaned_text = data_preprocess(text)
-    model = Word2Vec(sentences=[cleaned_text], vector_size=10, window=1, min_count=1, workers=4)
+    model = Word2Vec(sentences=[cleaned_text], vector_size=100, window=1, min_count=1, workers=4)
 
-    model.train([text],
+    model.train([cleaned_text],
                 total_examples=model.corpus_count,
                 epochs=10)  # Number of iterations (epochs) over the corpus
     word_vectors = model.wv
 
     result = []
     # Get the word vector for a specific word
-    for word in text:
-        word_vector = word_vectors[word]
+    for word in cleaned_text:
+        word_vector = word_vectors[word].tolist()
         result.append(word_vector)
-    return result
+    
+    final_result = get_vect_avg(result)
+    return final_result
 
 def save_to_csv(all_info, csv_file_path):
     headers = ["File Name", "Case Number", "Decision Date", "Tribunal/Court", "Outcome", "The Facts", "Unigram Vector",
-               "Word2Vec", "Capitalized Words Before 'Act ('"]
+               "word2vec", "Capitalized Words Before 'Act ('"]
     with open(csv_file_path, 'w', newline='', encoding='utf-8') as file:
         writer = csv.DictWriter(file, fieldnames=headers)
         writer.writeheader()
@@ -165,7 +187,7 @@ def batch_process_pdf_folder(folder_path, csv_file_path):
     # Use tqdm to create a progress bar for the loop
     for file in tqdm(pdf_files, desc="Processing PDFs"):
         pdf_path = os.path.join(folder_path, file)
-        key_info = extract_key_info(pdf_path)
+        key_info =  extract_key_info(pdf_path)
         all_info.append(key_info)
 
     save_to_csv(all_info, csv_file_path)
@@ -174,7 +196,7 @@ def batch_process_pdf_folder(folder_path, csv_file_path):
 
 
 # Adjust these paths as per your requirements
-folder_path = 'i:/CS3244/test_data/'
-csv_file_path = 'i:/CS3244/final_data.csv'
+folder_path = 'D:/CS3244 project space/'
+csv_file_path = 'D:/CS3244 project space/final_data.csv'
 
 batch_process_pdf_folder(folder_path, csv_file_path)
