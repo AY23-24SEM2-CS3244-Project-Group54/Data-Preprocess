@@ -54,7 +54,7 @@ def extract_key_info(pdf_path):
         "Outcome": "Outcome not explicitly mentioned",
         "The Facts": "Facts section not found",
         "Unigram Vector": [],
-        #"word2vec": []
+        "word2vec": []
     }
 
     # Extract Tribunal/Court
@@ -82,7 +82,7 @@ def extract_key_info(pdf_path):
     key_info["Unigram Vector"] = get_unigram_vector(key_info["The Facts"])
 
     # Word2Vec
-    #key_info["word2vec"] = word2vec_converter(key_info["The Facts"])
+    key_info["word2vec"] = word2vec_converter(key_info["The Facts"])
 
     # Determine the outcome
     last_page_lines = last_page_text.split('\n')
