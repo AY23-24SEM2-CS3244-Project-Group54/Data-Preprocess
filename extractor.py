@@ -21,6 +21,7 @@ def extract_key_info(pdf_path):
     last_page_text = doc[-1].get_text("text")
     full_text = "".join([page.get_text() for page in doc])
 
+    print(first_page_text)
     # Keywords and corresponding outcomes
     keywords_to_outcomes = {
         "dismissed": "Appeal dismissed.",
@@ -31,6 +32,7 @@ def extract_key_info(pdf_path):
 
     # Regex patterns
     decision_date_pattern = re.compile(r"(Decision Date)\s*:\s*(.+)")
+    coram_pattern = re.compile(r"(Coram)\s*:\s*(.+)")
     facts_section_pattern = re.compile(r"The facts\s*(.*?)(?=(Version No|\Z))", re.DOTALL)
     capitalized_words_pattern = re.compile(r"([A-Z][\w\s]+)(?=Act \()")
     unique_sequences = set()
@@ -39,6 +41,7 @@ def extract_key_info(pdf_path):
     key_info = {
         "File Name": os.path.basename(pdf_path),
         "Decision Date": "",
+        "Coram": "",
         "Tribunal/Court": "",
         "Outcome": "Outcome not explicitly mentioned",
         "The Facts": "Facts section not found",
@@ -54,6 +57,10 @@ def extract_key_info(pdf_path):
         elif 'SGCA':
             key_info["Tribunal/Court"] = 'Court of Appeal'
 
+    # Extract Coram
+    for match in coram_pattern.finditer(first_page_text):
+        key_info[match.group(1)] = match.group(2)
+            
     # Match case information
     for match in decision_date_pattern.finditer(first_page_text):
         key_info[match.group(1)] = match.group(2)
@@ -62,7 +69,6 @@ def extract_key_info(pdf_path):
     facts_section = facts_section_pattern.search(full_text)
     if facts_section:
         key_info["The Facts"] = facts_section.group(1).strip()
-        print(facts_section.group(1).strip())
 
     # Unigram Vector
     key_info["Unigram Vector"] = get_unigram_vector(key_info["The Facts"])
@@ -158,7 +164,7 @@ def word2vec_converter(text):
     return result
 
 def save_to_csv(all_info, csv_file_path):
-    headers = ["File Name", "Case Number", "Decision Date", "Tribunal/Court", "Outcome", "The Facts", "Unigram Vector",
+    headers = ["File Name", "Case Number", "Decision Date", "Tribunal/Court", "Coram", "Outcome", "The Facts", "Unigram Vector",
                "Word2Vec", "Capitalized Words Before 'Act ('"]
     with open(csv_file_path, 'w', newline='', encoding='utf-8') as file:
         writer = csv.DictWriter(file, fieldnames=headers)
