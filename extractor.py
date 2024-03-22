@@ -43,6 +43,7 @@ def extract_key_info(pdf_path):
         "Decision Date": "",
         "Coram": "",
         "Tribunal/Court": "",
+        "Area of Law": "",
         "Outcome": "Outcome not explicitly mentioned",
         "The Facts": "Facts section not found",
         "Unigram Vector": [],
@@ -164,7 +165,7 @@ def word2vec_converter(text):
     return result
 
 def save_to_csv(all_info, csv_file_path):
-    headers = ["File Name", "Case Number", "Decision Date", "Tribunal/Court", "Coram", "Outcome", "The Facts", "Unigram Vector",
+    headers = ["File Name", "Case Number", "Decision Date", "Coram", "Tribunal/Court", "Area of Law","Outcome", "The Facts", "Unigram Vector",
                "Word2Vec", "Capitalized Words Before 'Act ('"]
     with open(csv_file_path, 'w', newline='', encoding='utf-8') as file:
         writer = csv.DictWriter(file, fieldnames=headers)
