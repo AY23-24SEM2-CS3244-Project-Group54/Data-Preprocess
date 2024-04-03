@@ -2,9 +2,20 @@ import fitz
 import csv
 import re
 import os
+import string
 from sklearn.feature_extraction.text import CountVectorizer
 from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+from unidecode import unidecode
 
+# Download NLTK resources if not already downloaded
+import nltk
+nltk.download('punkt')
+nltk.download('stopwords')
+nltk.download('wordnet')
+
+lemmatizer = WordNetLemmatizer()
 
 def extract_key_info(pdf_path, total_vocabulary):
     file_name = os.path.basename(pdf_path)
@@ -20,6 +31,7 @@ def extract_key_info(pdf_path, total_vocabulary):
     facts_section = re.search(r"The facts\s*(.*?)(?=(Version No|\Z))", full_text, re.DOTALL)
     if facts_section:
         facts_text = facts_section.group(1).strip()
+        facts_text = preprocess_text(facts_text)
         # Check for bold text in the facts section
         bold_text_found = False
         for line in facts_text.split('\n'):
@@ -72,10 +84,21 @@ def extract_key_info(pdf_path, total_vocabulary):
     # print(key_info)
     return key_info
 
+# TODO fix the repeating indices bug
 def get_unigram_vector(text, total_vocab):
+
+    # total_vocab = {
+    #     "0": 1,
+    #     "1": 2,
+    #     "0": 3,
+    #     "2": 4,
+    #     "1": 5
+    # }
+
     # Initialize CountVectorizer with total_vocab as vocabulary
     vectorizer = CountVectorizer(stop_words='english', lowercase=True, vocabulary=total_vocab)
     unigram_vector = vectorizer.fit_transform([text]).toarray()[0]
+
     # print(text)
     # print("Debugging the output unigram array\n")
     # for num in unigram_vector:
@@ -87,7 +110,6 @@ def get_unigram_vector(text, total_vocab):
 
 # def save_to_csv(info, csv_file_path):
 #     headers = ["File Name", "Case Number", "Decision Date", "Tribunal/Court", "The Facts", "Unigram Vector", "Outcome"]
-    
 #     with open(csv_file_path, 'a', newline='', encoding='utf-8') as file:
 #         writer = csv.DictWriter(file, fieldnames=headers)
 #         print("Debugging the output unigram array\n")
@@ -101,6 +123,7 @@ def get_unigram_vector(text, total_vocab):
 #   1. Saves legal document content to csv file
 #   2. Saves legal document unigram frequency vector to txt file and its pointer to csc file
 #   3. Saves 
+
 def save_to_csv(info, csv_file_path):
     headers = ["File Name", "Case Number", "Decision Date", "Tribunal/Court", "The Facts", "Unigram Vector", "Outcome"]
     with open(csv_file_path, 'a', newline='', encoding='utf-8') as file:
@@ -159,8 +182,35 @@ def batch_process_pdf_folder(folder_path, csv_file_path, total_vocabulary):
 #                 file.write('\n')
 #     return total_vocab
     
+def create_and_save_total_vocab(folder_path):
+    total_vocab = {}
+    for file in os.listdir(folder_path):
+        if file.lower().endswith(".pdf"):
+            pdf_path = os.path.join(folder_path, file)
+            doc = fitz.open(pdf_path)
+            full_text = ""
+            for page in doc:
+                full_text += page.get_text()
+            
+            # print("Debugging original text")
+            # for word in full_text:
+            #     print(word)
+
+            words = preprocess_text(full_text)
+            for word in words:
+                total_vocab[word] = total_vocab.get(word, 0) + 1
+            doc.close()
+        
+    sorted_vocab = dict(sorted(total_vocab.items()))
+
+    with open("vocabulary.txt", 'w', encoding='utf-8') as file:
+        for word, freq in sorted_vocab.items():
+            file.write(f"{word} {freq}\n")
+
+    return total_vocab
+
 # def create_and_save_total_vocab(folder_path):
-#     total_vocab = {}
+#     total_vocab = set()
 #     for file in os.listdir(folder_path):
 #         if file.lower().endswith(".pdf"):
 #             pdf_path = os.path.join(folder_path, file)
@@ -169,29 +219,50 @@ def batch_process_pdf_folder(folder_path, csv_file_path, total_vocabulary):
 #             for page in doc:
 #                 full_text += page.get_text()
 #             words = word_tokenize(full_text.lower())
-#             for word in words:
-#                 total_vocab[word] = total_vocab.get(word, 0) + 1
+#             total_vocab.update(words)
 #             doc.close()
-        
-#     with open("vocabulary.txt", 'w', encoding='utf-8') as file:
-#         for word, freq in total_vocab.items():
-#             file.write(f"{word} {freq}\n")
-
 #     return total_vocab
 
-def create_and_save_total_vocab(folder_path):
-    total_vocab = set()
-    for file in os.listdir(folder_path):
-        if file.lower().endswith(".pdf"):
-            pdf_path = os.path.join(folder_path, file)
-            doc = fitz.open(pdf_path)
-            full_text = ""
-            for page in doc:
-                full_text += page.get_text()
-            words = word_tokenize(full_text.lower())
-            total_vocab.update(words)
-            doc.close()
-    return total_vocab
+def preprocess_text(text):
+    # Tokenization
+    words = word_tokenize(text.lower())
+    # print("Debugging token")
+    # for word in words:
+    #     print(word)
+        
+    # Stopword removal
+    stop_words = set(stopwords.words('english'))
+    words = [word for word in words if word not in stop_words]
+    # print("Debugging stopwords")
+    # for word in words:
+    #     print(word)
+    
+    # Lemmatization
+    words = [lemmatizer.lemmatize(word) for word in words]
+    # print("Debugging lemmatization")
+    # for word in words:
+    #     print(word)
+
+    # Removal punctuation and special char
+    words = [unidecode(word) for word in words if word.isalnum()]
+
+    return words
+
+
+
+def get_duplicate_indices(vocabulary):
+    seen = set()
+    duplicate_indices = []
+    for index, word in enumerate(vocabulary):
+        if word in seen:
+            duplicate_indices.append(index)
+        else:
+            seen.add(word)
+    return duplicate_indices
+
+
+
+
 
 if __name__ == "__main__":
     # Hardcoded folder path and CSV file path
@@ -201,5 +272,12 @@ if __name__ == "__main__":
     # Create total vocabulary
     total_vocabulary = create_and_save_total_vocab(folder_path)
     # print(total_vocabulary)
-    # Batch process here
+
+    # # Call this function after creating the vocabulary
+    # duplicate_indices = get_duplicate_indices(total_vocabulary)
+    # if duplicate_indices:
+    #     print("Duplicate indices found:", duplicate_indices)
+    # else:
+    #     print("No duplicate indices found.")
+
     batch_process_pdf_folder(folder_path, csv_file_path, total_vocabulary)
