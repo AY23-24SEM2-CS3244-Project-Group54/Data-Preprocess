@@ -10,6 +10,8 @@ from nltk.stem import WordNetLemmatizer
 from nltk import pos_tag
 from unidecode import unidecode
 from tqdm import tqdm
+from gensim.models import Word2Vec
+import numpy as np
 
 # Download NLTK resources if not already downloaded
 import nltk
@@ -17,7 +19,6 @@ nltk.download('punkt')
 nltk.download('stopwords')
 nltk.download('wordnet')
 nltk.download('averaged_perceptron_tagger')
-
 
 def extract_key_info(pdf_path, total_vocabulary):
     file_name = os.path.basename(pdf_path)
@@ -46,6 +47,7 @@ def extract_key_info(pdf_path, total_vocabulary):
         "Case Number": re.search(r"Case Number\s*:\s*(.+)", full_text).group(1) if re.search(r"Case Number\s*:\s*(.+)", full_text) else "",
         "Decision Date": re.search(r"Decision Date\s*:\s*(.+)", full_text).group(1) if re.search(r"Decision Date\s*:\s*(.+)", full_text) else "",
         "Tribunal/Court": re.search(r"Tribunal/Court\s*:\s*(.+)", full_text).group(1) if re.search(r"Tribunal/Court\s*:\s*(.+)", full_text) else "",
+        "word2vec": [],
         "Outcome": "NA"
     }
 
@@ -86,6 +88,39 @@ def get_unigram_vector(text, total_vocab):
             unigram_vector[index] += 1
 
     return unigram_vector
+
+def get_vect_avg(vect):
+    vect = np.array(vect)
+    result = []
+    for i in range(vect.shape[1]):
+        sum_of_first_elements = vect[:, i].sum()
+
+        # Calculate the number of arrays
+        num_arrays = vect.shape[0]
+
+        # Calculate the average
+        result.append(sum_of_first_elements / num_arrays)
+    return result
+
+
+def word2vec_converter(text):
+    cleaned_text = preprocess_text(text)
+    model = Word2Vec(sentences=[cleaned_text], vector_size=100, window=1, min_count=1, workers=4)
+
+    model.train([cleaned_text],
+                total_examples=model.corpus_count,
+                epochs=10)  # Number of iterations (epochs) over the corpus
+    word_vectors = model.wv
+
+    result = []
+    # Get the word vector for a specific word
+    for word in cleaned_text:
+        word_vector = word_vectors[word].tolist()
+        result.append(word_vector)
+    
+    final_result = get_vect_avg(result)
+    return final_result
+
 
 # This section of code does three things
 #   1. Saves legal document content to csv file
