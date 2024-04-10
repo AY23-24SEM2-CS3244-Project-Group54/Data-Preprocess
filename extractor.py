@@ -25,16 +25,31 @@ nltk.download('wordnet')
 def extract_key_info(pdf_path):
     doc = fitz.open(pdf_path)
     first_page_text = doc[0].get_text("text")
+    last_two_page_text = ""
+
+    second_last_page_text = doc[-2].get_text("text")
+
+    # Get text from the last page
     last_page_text = doc[-1].get_text("text")
+
+    # Combine the text from the last two pages
+    last_two_page_text = second_last_page_text + "\n" + last_page_text
     full_text = "".join([page.get_text() for page in doc])
 
-    print(first_page_text)
+    #print(first_page_text)
     # Keywords and corresponding outcomes
     keywords_to_outcomes = {
-        "dismissed": "Appeal dismissed.",
-        "allowed": "Appeal allowed.",
-        "accordingly": "Order accordingly.",
-        "granted": "Declaration granted."
+        "dismissed": "Appeal dismissed",
+        "allowed": "Appeal allowed",
+        "accordingly": "Order accordingly",
+        "granted": "Appeal allowed",
+        "invalid": "Appeal dismissed",
+        "refused": "Appeal dismissed",
+        "appellant be awarded": "Appeal allowed",
+        "allow": "Appeal allowed",
+        "dismiss": "Appeal dismissed",
+        "dismissing": "Appeal dismissed",
+        "allowing": "Appeal allowed"
     }
 
     # Regex patterns
@@ -79,14 +94,14 @@ def extract_key_info(pdf_path):
         key_info["The Facts"] = facts_section.group(1).strip()
 
     # Unigram Vector
-    key_info["Unigram Vector"] = get_unigram_vector(key_info["The Facts"])
+    #key_info["Unigram Vector"] = get_unigram_vector(key_info["The Facts"])
 
     # Word2Vec
-    key_info["word2vec"] = word2vec_converter(key_info["The Facts"])
+    #key_info["word2vec"] = word2vec_converter(key_info["The Facts"])
 
     # Determine the outcome
-    last_page_lines = last_page_text.split('\n')
-    for line in reversed(last_page_lines):
+    last_two_page_lines = last_two_page_text.split('\n')
+    for line in reversed(last_two_page_lines):
         for keyword, outcome in keywords_to_outcomes.items():
             if keyword in line.lower():
                 key_info["Outcome"] = outcome
@@ -136,7 +151,7 @@ def data_preprocess(text):
     tokenized_text = [word for word in tokenized_text if word not in stop_words]
 
     lemmatizer = WordNetLemmatizer()
-    return [lemmatizer.lemmatize(word, get_wordnet_pos(word)) for word in text]
+    return [lemmatizer.lemmatize(word, get_wordnet_pos(word)) for word in tokenized_text]
 
 def get_vect_avg(vect):
     vect = np.array(vect)
@@ -170,20 +185,25 @@ def get_unigram_vector(text):
 
 def word2vec_converter(text):
     cleaned_text = data_preprocess(text)
-    model = Word2Vec(sentences=[cleaned_text], vector_size=100, window=1, min_count=1, workers=4)
+    if cleaned_text:
+        model = Word2Vec(sentences=[cleaned_text], vector_size=100, window=1, min_count=1, workers=4)
 
-    model.train([cleaned_text],
-                total_examples=model.corpus_count,
-                epochs=10)  # Number of iterations (epochs) over the corpus
-    word_vectors = model.wv
+        model.build_vocab([cleaned_text])
 
-    result = []
-    # Get the word vector for a specific word
-    for word in cleaned_text:
-        word_vector = word_vectors[word].tolist()
-        result.append(word_vector)
+        model.train([cleaned_text],
+                    total_examples=model.corpus_count,
+                    epochs=50)  # Number of iterations (epochs) over the corpus
+        word_vectors = model.wv
+
+        result = []
+        # Get the word vector for a specific word
+        for word in cleaned_text:
+            word_vector = word_vectors[word].tolist()
+            result.append(word_vector)
     
-    final_result = get_vect_avg(result)
+        final_result = get_vect_avg(result)
+    else:
+        final_result = []
     return final_result
 
 def save_to_csv(all_info, csv_file_path):
@@ -198,7 +218,7 @@ def save_to_csv(all_info, csv_file_path):
 
 def batch_process_pdf_folder(folder_path, csv_file_path):
     all_info = []
-    pdf_files = [file for file in os.listdir(folder_path)[0:100:5] if file.lower().endswith(".pdf")]
+    pdf_files = [file for file in os.listdir(folder_path) if file.lower().endswith(".pdf")]
     # Use tqdm to create a progress bar for the loop
     for file in tqdm(pdf_files, desc="Processing PDFs"):
         pdf_path = os.path.join(folder_path, file)
@@ -211,7 +231,10 @@ def batch_process_pdf_folder(folder_path, csv_file_path):
 
 
 # Adjust these paths as per your requirements
-folder_path = 'data/raw/'
-csv_file_path = 'final_data.csv'
+# folder_path = 'data/raw/'
+# csv_file_path = 'final_data.csv'
+folder_path = 'C:/Users/Acer/OneDrive - National University of Singapore/NUS Y3S2/CS3244/data/raw'
+csv_file_path = 'D:/CS3244 project space/final_data.csv'
+
 
 batch_process_pdf_folder(folder_path, csv_file_path)
