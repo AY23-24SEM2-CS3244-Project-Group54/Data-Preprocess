@@ -14,6 +14,7 @@ from nltk.stem import WordNetLemmatizer
 from gensim.test.utils import common_texts
 from gensim.models import Word2Vec
 import numpy as np
+from nltk.tokenize import sent_tokenize
 
 nltk.download('punkt')
 nltk.download('stopwords')
@@ -88,16 +89,32 @@ def extract_key_info(pdf_path):
     for match in decision_date_pattern.finditer(first_page_text):
         key_info[match.group(1)] = match.group(2)
 
-    # Extract facts section
-    facts_section = facts_section_pattern.search(full_text)
+    # Keywords indicating the beginning of a facts section
+    keywords = [
+        "fact", "facts", "background", "the background", "background facts",
+        "background to the dispute", "factual background", "background to",
+        "the underlying facts", "pertinent background facts"
+    ]
+    
+    # Constructing a regex pattern to capture the facts section
+    keywords_pattern = '|'.join(keywords)
+    regex_pattern = rf"(?i)(\b(?:{keywords_pattern})\b)\s*(.*?)(?=(Version No|\Z))"
+
+    # Searching for the facts section
+    facts_section = re.search(regex_pattern, full_text, re.DOTALL)
+    
     if facts_section:
-        key_info["The Facts"] = facts_section.group(1).strip()
+        facts_text = facts_section.group(2).strip()
+        sentences = sent_tokenize(facts_text)
+        facts_text = ' '.join(sentences[:11])
+        key_info["The Facts"] = facts_text  # Update this field.
+
 
     # Unigram Vector
-    #key_info["Unigram Vector"] = get_unigram_vector(key_info["The Facts"])
+    key_info["Unigram Vector"] = get_unigram_vector(key_info["The Facts"])
 
     # Word2Vec
-    #key_info["word2vec"] = word2vec_converter(key_info["The Facts"])
+    key_info["word2vec"] = word2vec_converter(key_info["The Facts"])
 
     # Determine the outcome
     last_two_page_lines = last_two_page_text.split('\n')
@@ -185,7 +202,10 @@ def get_unigram_vector(text):
 
 def word2vec_converter(text):
     cleaned_text = data_preprocess(text)
-    model = Word2Vec(sentences=[cleaned_text], vector_size=100, window=1, min_count=1, workers=4, sg=1)
+    if cleaned_text:
+        model = Word2Vec(sentences=[cleaned_text], vector_size=100, window=1, min_count=1, workers=4)
+
+        model.build_vocab([cleaned_text])
 
         model.train([cleaned_text],
                     total_examples=model.corpus_count,
@@ -230,8 +250,8 @@ def batch_process_pdf_folder(folder_path, csv_file_path):
 # Adjust these paths as per your requirements
 # folder_path = 'data/raw/'
 # csv_file_path = 'final_data.csv'
-folder_path = 'C:/Users/Acer/OneDrive - National University of Singapore/NUS Y3S2/CS3244/data/raw'
-csv_file_path = 'D:/CS3244 project space/final_data.csv'
+folder_path = "i:/CS3244/small_data"  # Adjust this path as per your folder structure
+csv_file_path = "i:/CS3244/123321.csv"  # Adjust this path as per your requirements
 
 
 batch_process_pdf_folder(folder_path, csv_file_path)
