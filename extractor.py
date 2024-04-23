@@ -203,7 +203,7 @@ def get_unigram_vector(text):
 def word2vec_converter(text):
     cleaned_text = data_preprocess(text)
     if cleaned_text:
-        model = Word2Vec(sentences=[cleaned_text], vector_size=100, window=1, min_count=1, workers=4)
+        model = Word2Vec(sentences=[cleaned_text], vector_size=100, window=1, min_count=1, workers=4,sg=1)
 
         model.build_vocab([cleaned_text])
 
