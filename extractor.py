@@ -42,7 +42,7 @@ def extract_key_info(pdf_path):
     keywords_to_outcomes = {
         "dismissed": "Appeal dismissed",
         "allowed": "Appeal allowed",
-        "accordingly": "Order accordingly",
+        "accordingly": "Appeal allowed",
         "granted": "Appeal allowed",
         "invalid": "Appeal dismissed",
         "refused": "Appeal dismissed",
@@ -232,6 +232,33 @@ def save_to_csv(all_info, csv_file_path):
         for info in all_info:
             writer.writerow(info)
 
+def create_and_save_total_vocab(folder_path):
+    total_vocab = {}
+    pdf_files = [file for file in os.listdir(folder_path) if file.lower().endswith(".pdf")]
+
+    # Create tqdm instance with total number of PDF files
+    with tqdm(total=len(pdf_files), desc="Processing PDF files") as pbar:
+        for file in pdf_files:
+            pdf_path = os.path.join(folder_path, file)
+            doc = fitz.open(pdf_path)
+            full_text = ""
+            for page in doc:
+                full_text += page.get_text()
+
+            words = data_preprocess(full_text)
+            for word in words:
+                total_vocab[word] = total_vocab.get(word, 0) + 1
+            doc.close()
+
+            pbar.update(1)  # Update progress bar
+
+    sorted_vocab = dict(sorted(total_vocab.items()))
+
+    with open("vocabulary.txt", 'w', encoding='utf-8') as file:
+        for word, freq in sorted_vocab.items():
+            file.write(f"{word} {freq}\n")
+
+    return total_vocab
 
 def batch_process_pdf_folder(folder_path, csv_file_path):
     all_info = []
@@ -250,8 +277,9 @@ def batch_process_pdf_folder(folder_path, csv_file_path):
 # Adjust these paths as per your requirements
 # folder_path = 'data/raw/'
 # csv_file_path = 'final_data.csv'
-folder_path = "i:/CS3244/small_data"  # Adjust this path as per your folder structure
-csv_file_path = "i:/CS3244/123321.csv"  # Adjust this path as per your requirements
+folder_path = r"/Users/joelleng/Desktop/CS3244/Project/data/raw/"  # Adjust this path as per your folder structure
+csv_file_path = "/Users/joelleng/Desktop/CS3244/Project/test.csv"  # Adjust this path as per your requirements
 
 
 batch_process_pdf_folder(folder_path, csv_file_path)
+create_and_save_total_vocab(folder_path)
