@@ -8,7 +8,7 @@ def download_files():
 
     base_url = 'https://www.elitigation.sg/gd/gd/{year}_{court}_{case_id}/pdf'
     
-    years = range(2000, 2024)
+    years = range(2000, 2016)
     courts = ['SGHC', 'SGCA']
     case_ids = range(1, 430)
 
